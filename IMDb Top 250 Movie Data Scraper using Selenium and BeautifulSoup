@@ -1,0 +1,59 @@
+import time
+import pandas as pd
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+
+IMDB_URL = "https://www.imdb.com/chart/top"
+WAIT_TIME = 10  
+
+
+options = Options()
+options.add_argument("--start-maximized")
+
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+
+print("🔗 Loading IMDb Top 250 page...")
+driver.get(IMDB_URL)
+
+try:
+    WebDriverWait(driver, WAIT_TIME).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "li.ipc-metadata-list-summary-item"))
+    )
+    print("✅ IMDb Top 250 list loaded successfully.")
+except Exception as e:
+    print("⚠️ Timeout waiting for IMDb list to load:", e)
+
+
+soup = BeautifulSoup(driver.page_source, "html.parser")
+movie_items = soup.select("li.ipc-metadata-list-summary-item")
+
+movies_data = []
+
+for item in movie_items:
+    title_tag = item.select_one("h3.ipc-title__text")
+    year_tag = item.select_one("span.sc-b189961a-8")
+    rating_tag = item.select_one("span.ipc-rating-star--rating")
+    link_tag = item.select_one("a.ipc-title-link-wrapper")
+
+    title = title_tag.text.strip() if title_tag else ""
+    year = year_tag.text.strip() if year_tag else ""
+    rating = rating_tag.text.strip() if rating_tag else ""
+    link = "https://www.imdb.com" + link_tag.get("href") if link_tag else ""
+
+    movies_data.append([title, year, rating, link])
+
+print(f"🎬 Found {len(movies_data)} movies.")
+
+df = pd.DataFrame(movies_data, columns=["Title", "Year", "Rating", "Link"])
+df.to_csv("IMDb_Top250_Movies.csv", index=False, encoding="utf-8")
+
+print("✅ Done! Scraped Top 250 movies saved to IMDb_Top250_Movies.csv")
+
+driver.quit()
